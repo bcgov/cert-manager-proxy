@@ -1,6 +1,6 @@
 module github.com/bcgov/cert-manager-proxy
 
-go 1.25.0
+go 1.27.1
 
 require (
 	k8s.io/apimachinery v0.30.3
