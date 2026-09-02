@@ -16,6 +16,84 @@ concurrency:
 permissions: {}
 
 jobs:
+  tests:
+    name: Tests
+    if: (! github.event.pull_request.draft)
+    runs-on: ubuntu-22.04
+    permissions:
+      contents: read
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+      - name: Build
+        run: go build ./...
+      - name: Vet
+        run: go vet ./...
+      - name: Test with coverage
+        run: go test ./... -coverprofile=coverage.out
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@fb8b3582c8e4def4969c97caa2f19720cb33a72f # v7
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          files: ./coverage.out
+          fail_ci_if_error: true
+
+  chart:
+    name: Chart
+    if: (! github.event.pull_request.draft)
+    runs-on: ubuntu-22.04
+    permissions:
+      contents: read
+    timeout-minutes: 5
+    env:
+      HELMFILE_VERSION: "1.7.4"
+    steps:
+      - uses: actions/checkout@v7
+      - uses: azure/setup-helm@9bc31f4ebc9c6b171d7bfbaa5d006ae7abdb4310 # v5.0.1
+      - name: Install Helmfile
+        run: |
+          curl -fsSL "https://github.com/helmfile/helmfile/releases/download/v${HELMFILE_VERSION}/helmfile_${HELMFILE_VERSION}_linux_amd64.tar.gz" | tar xz helmfile
+          sudo mv helmfile /usr/local/bin/helmfile
+      - name: Lint (default values)
+        run: helm lint charts/cert-manager-proxy --set auth.token=ci-placeholder
+      - name: Lint (values-example.yaml)
+        run: helm lint charts/cert-manager-proxy -f charts/cert-manager-proxy/values-example.yaml --set auth.token=ci-placeholder
+      - name: Template (default values)
+        run: helm template test charts/cert-manager-proxy --set auth.token=ci-placeholder > /dev/null
+      - name: Template (values-example.yaml)
+        run: helm template test charts/cert-manager-proxy -f charts/cert-manager-proxy/values-example.yaml --set auth.token=ci-placeholder > /dev/null
+      - name: Validate helmfile.yaml (dependency graph + lint + render)
+        run: |
+          export CERT_PROXY_TOKEN=ci-placeholder
+          helmfile show-dag
+          helmfile lint
+          helmfile template > /dev/null
+
+  integration:
+    name: Integration
+    if: (! github.event.pull_request.draft)
+    runs-on: ubuntu-22.04
+    permissions:
+      contents: read
+    timeout-minutes: 20
+    env:
+      HELMFILE_VERSION: "1.7.4"
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+      - uses: azure/setup-helm@9bc31f4ebc9c6b171d7bfbaa5d006ae7abdb4310 # v5.0.1
+      - name: Install Helmfile
+        run: |
+          curl -fsSL "https://github.com/helmfile/helmfile/releases/download/v${HELMFILE_VERSION}/helmfile_${HELMFILE_VERSION}_linux_amd64.tar.gz" | tar xz helmfile
+          sudo mv helmfile /usr/local/bin/helmfile
+      - name: Run `helmfile sync` on a real ephemeral k3s cluster and verify it
+        run: go test -tags integration -v -timeout 15m ./test/integration/...
+
   # https://github.com/marketplace/actions/aqua-security-trivy
   trivy:
     name: Trivy Security Scan
@@ -65,7 +143,7 @@ jobs:
   # ==========================================================================
   results:
     name: Analysis Results
-    needs: [trivy]
+    needs: [tests, chart, integration, trivy]
     if: always() && (! github.event.pull_request.draft)
     runs-on: ubuntu-slim
     timeout-minutes: 1
