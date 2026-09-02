@@ -40,15 +40,30 @@ go test ./...
 `charts/cert-manager-proxy` is a Helm chart for the whole stack: the proxy
 itself, plus cert-manager and `approver-policy` as chart dependencies (both
 pulled from `oci://quay.io/jetstack/charts` — nothing vendored), plus your
-`ClusterIssuer`s and `CertificateRequestPolicy`s templated from values. One
-`helm install`, no separate `kubectl apply` step.
+`ClusterIssuer`s and `CertificateRequestPolicy`s templated from values. No
+separate `kubectl apply` step — but it is two `helm` commands, not one:
 
 ```sh
 helm dependency build charts/cert-manager-proxy
+
+# Phase 1: cert-manager + approver-policy + the proxy. No issuers/policies
+# yet -- their CRDs don't exist until this phase finishes, and Helm
+# validates every resource's GVK against the API server up front, so
+# creating instances of a CRD type in the same install that defines the
+# CRD fails outright (this is exactly what cert-manager's own docs warn
+# against; confirmed against a real cluster in test/integration).
 helm install cert-manager-proxy charts/cert-manager-proxy \
   --namespace cert-proxy --create-namespace \
-  --values charts/cert-manager-proxy/values-example.yaml \
   --set auth.token=s3cret   # or auth.existingSecretName for anything real
+
+# wait for cert-manager to actually be Ready (its CRDs are registered by
+# then), then:
+
+# Phase 2: now that the CRDs exist, add the ClusterIssuers/
+# CertificateRequestPolicies.
+helm upgrade cert-manager-proxy charts/cert-manager-proxy \
+  --namespace cert-proxy --reuse-values \
+  --values charts/cert-manager-proxy/values-example.yaml
 ```
 
 The chart sets `disableAutoApproval=true` on the cert-manager dependency —
