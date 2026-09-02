@@ -34,25 +34,41 @@ go build ./...
 go test ./...
 ```
 
-## Cluster setup
+## Deploying to a cluster
 
-`scripts/bootstrap-cluster.sh` installs cert-manager and `approver-policy`
-(pinned Helm chart versions) on whatever cluster your kubeconfig points at,
-then applies `manifests/`:
+`charts/cert-manager-proxy` is a Helm chart for the proxy itself, with
+cert-manager and `approver-policy` declared as chart dependencies (both
+pulled from `oci://quay.io/jetstack/charts` — nothing vendored). One
+`helm install` brings up all three.
+
+`scripts/bootstrap-cluster.sh` wraps that: builds the chart dependencies,
+installs the release (generating a bearer token if you don't pass
+`CERT_PROXY_TOKEN`), and applies this repo's example `manifests/`:
 
 ```sh
 ./scripts/bootstrap-cluster.sh
 ```
 
-It sets `disableAutoApproval=true` on the cert-manager install — without
-that, cert-manager's built-in approver auto-approves every
-`CertificateRequest` and the whole pre-approval gate this repo exists for
-does nothing.
+Or drive Helm directly:
 
-## Run
+```sh
+helm dependency build charts/cert-manager-proxy
+helm install cert-manager-proxy charts/cert-manager-proxy \
+  --namespace cert-proxy --create-namespace \
+  --set auth.token=s3cret   # or auth.existingSecretName for anything real
+```
+
+The chart sets `disableAutoApproval=true` on the cert-manager dependency —
+without that, cert-manager's built-in approver auto-approves every
+`CertificateRequest` and the whole pre-approval gate this repo exists for
+does nothing. See `charts/cert-manager-proxy/values.yaml` for the rest of
+the knobs (image, replica count, resources, existing-secret auth, disabling
+either dependency if you already run it cluster-wide).
+
+## Run locally
 
 Requires a kubeconfig (or in-cluster config) with access to a cluster that
-has cert-manager and `approver-policy` installed (see Cluster setup above).
+has cert-manager and `approver-policy` installed (see Deploying above).
 
 `CERT_PROXY_TOKEN` is required — the server refuses to start without it.
 It's a single shared bearer token, fine for one trusted caller; see the
@@ -80,4 +96,6 @@ EKS, skip static AWS keys entirely and use IRSA instead (see the comment in
 
 ## Not done yet
 
-- Deployment manifests for the proxy itself (Deployment/Service/SA)
+- CI to build and push the container image (`Dockerfile` exists but nothing
+  publishes it to `ghcr.io/bcgov/cert-manager-proxy` yet, so the chart's
+  default `image.repository` won't resolve until that's set up)

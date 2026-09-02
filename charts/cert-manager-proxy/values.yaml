@@ -1,0 +1,48 @@
+# -- Image for the cert-manager-proxy intake API itself.
+image:
+  repository: ghcr.io/bcgov/cert-manager-proxy
+  tag: "" # defaults to .Chart.AppVersion
+  pullPolicy: IfNotPresent
+
+replicaCount: 1
+
+service:
+  port: 8080
+
+# -- Namespace Certificate objects are created in (CERT_PROXY_NAMESPACE).
+# Defaults to the release namespace.
+namespace: ""
+
+auth:
+  # -- Name of an existing Secret holding the bearer token (recommended:
+  # create it out of band, e.g. `kubectl create secret generic ...`).
+  existingSecretName: ""
+  existingSecretKey: "token"
+  # -- Plaintext token the chart will store in a Secret it creates.
+  # Convenient for a quick try; for anything real, use existingSecretName
+  # instead so the token never passes through `helm install`/history.
+  token: ""
+
+serviceAccount:
+  create: true
+  name: ""
+
+resources: {}
+
+# -- cert-manager is installed as a chart dependency (oci://quay.io/jetstack/charts).
+# disableAutoApproval is required: without it cert-manager's built-in
+# approver auto-approves every CertificateRequest, bypassing approver-policy
+# entirely and defeating the pre-approval gate this whole proxy exists for.
+cert-manager:
+  enabled: true
+  crds:
+    enabled: true
+  disableAutoApproval: true
+
+# -- approver-policy is installed as a chart dependency; it's what actually
+# enforces the pre-approval gate via CertificateRequestPolicy + RBAC.
+# See manifests/ in this repo for example policies to apply after install.
+# (Its own values.schema.json rejects an unknown "enabled" key, so the
+# install toggle lives here rather than nested under cert-manager-approver-policy:.)
+approverPolicyEnabled: true
+cert-manager-approver-policy: {}

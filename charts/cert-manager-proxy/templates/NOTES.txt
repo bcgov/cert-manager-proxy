@@ -1,0 +1,27 @@
+cert-manager-proxy is deployed.
+
+This chart also installed cert-manager and approver-policy as dependencies
+(disable either via --set cert-manager.enabled=false /
+--set cert-manager-approver-policy.enabled=false if you already run them
+cluster-wide).
+
+Next steps:
+1. Apply the example ClusterIssuer(s) and CertificateRequestPolicy(-ies)
+   from this repo's manifests/ directory -- edit the REPLACE_ME_* values
+   first:
+
+     kubectl apply -f manifests/
+
+2. Port-forward and try it:
+
+     kubectl port-forward svc/{{ include "cert-manager-proxy.fullname" . }} 8080:{{ .Values.service.port }}
+     curl -X POST localhost:8080/certificates \
+       -H "Authorization: Bearer <your token>" \
+       -d '{"domain":"app.example.com","provider":"letsencrypt"}'
+
+{{- if and (not .Values.auth.existingSecretName) .Values.auth.token }}
+
+NOTE: auth.token was set directly via values/--set, which means it's now in
+this release's Helm history. Fine for a quick try; for anything real, create
+a Secret out of band and set auth.existingSecretName instead.
+{{- end }}
