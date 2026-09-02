@@ -1,4 +1,6 @@
-# One `helmfile apply` brings up the whole stack in the right order:
+# One `helmfile sync` brings up the whole stack in the right order:
+# (`helmfile apply` works too, but needs the helm-diff plugin installed
+# separately -- sync doesn't, so it's the simpler default for a fresh install)
 # cert-manager, then approver-policy (needs cert-manager's CRDs/webhook),
 # then this repo's own chart (needs approver-policy's CRD). Each is a
 # separate Helm release, so there's no same-release CRD-registration race

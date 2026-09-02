@@ -5,7 +5,13 @@
 [![Lifecycle](https://img.shields.io/badge/Lifecycle-Experimental-339999)](https://github.com/bcgov/repomountie/blob/master/doc/lifecycle-badges.md)
 [![codecov](https://codecov.io/gh/bcgov/cert-manager-proxy/branch/main/graph/badge.svg)](https://codecov.io/gh/bcgov/cert-manager-proxy)
 
-> **Experimental.** Untested against a real cluster. Do not deploy as-is.
+> **Experimental.** The Helmfile stack (cert-manager, approver-policy, RBAC,
+> `ClusterIssuer`s/`CertificateRequestPolicy`s) is verified against a real
+> cluster on every CI run — see `test/integration`. The proxy application
+> itself has never run in a cluster, though: no container image is
+> published yet (see "Not done yet"), and no real ACME issuance/DNS-01 has
+> been exercised end-to-end (no reachable DNS from the CI test cluster).
+> Do not deploy as-is.
 
 A thin intake API in front of [cert-manager](https://cert-manager.io/) that
 lets you request certificates from multiple ACME providers (DNS-01 only)
@@ -51,7 +57,7 @@ way).
 ```sh
 brew install helmfile   # or see https://helmfile.readthedocs.io
 
-export CERT_PROXY_TOKEN=s3cret   # or use auth.existingSecretName in values-example.yaml for anything real
+export CERT_PROXY_TOKEN=s3cret   # or set auth.existingSecretName instead, for anything real
 helmfile sync
 ```
 
@@ -128,4 +134,9 @@ curl -H "Authorization: Bearer s3cret" localhost:8080/certificates/app-example-c
 
 - CI to build and push the container image (`Dockerfile` exists but nothing
   publishes it to `ghcr.io/bcgov/cert-manager-proxy` yet, so the chart's
-  default `image.repository` won't resolve until that's set up)
+  default `image.repository` won't resolve until that's set up) — until
+  then, the proxy's own Deployment can't actually run in a cluster
+- Real end-to-end ACME issuance / DNS-01 challenge — `test/integration`
+  verifies the platform (cert-manager, approver-policy, CRDs, RBAC) comes
+  up correctly, but has no reachable DNS/domain to actually complete a
+  challenge against
