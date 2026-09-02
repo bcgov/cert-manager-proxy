@@ -43,19 +43,6 @@ pulled from `oci://quay.io/jetstack/charts` — nothing vendored), plus your
 `ClusterIssuer`s and `CertificateRequestPolicy`s templated from values. One
 `helm install`, no separate `kubectl apply` step.
 
-`scripts/bootstrap-cluster.sh` wraps that: builds the chart dependencies
-and installs the release (generating a bearer token if you don't pass
-`CERT_PROXY_TOKEN`), using `values-example.yaml` — full of `REPLACE_ME_*`
-placeholders — unless you point it at your own:
-
-```sh
-./scripts/bootstrap-cluster.sh
-# or, with real values:
-VALUES_FILE=my-values.yaml ./scripts/bootstrap-cluster.sh
-```
-
-Or drive Helm directly:
-
 ```sh
 helm dependency build charts/cert-manager-proxy
 helm install cert-manager-proxy charts/cert-manager-proxy \
