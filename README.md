@@ -11,28 +11,193 @@ A thin intake API in front of [cert-manager](https://cert-manager.io/) that
 lets you request certificates from multiple ACME providers (DNS-01 only)
 behind an out-of-band pre-approval gate.
 
-**Obtain:** `POST /certificates` creates a cert-manager `Certificate`. After
-approval, ACME DNS-01 fills Secret `{name}-tls`. **Rollover:** do not POST
-again (that is a `409`); cert-manager renews the same object/Secret. Full
-flow, diagrams, and how to replace an existing SSL cert:
-[docs/certificate-lifecycle.md](docs/certificate-lifecycle.md).
+**In one sentence:** this service **starts** a cert. cert-manager **keeps** it
+renewed. Your app reads the Kubernetes Secret. This API never talks to Let's
+Encrypt (or ZeroSSL, or Entrust) itself.
 
-## How it works
+## Plain language
 
-- **Multi-provider** — one `ClusterIssuer` per ACME CA (Let's Encrypt,
-  ZeroSSL, ...), each with its own DNS-01 solver. The intake API just picks
-  an issuer by name; cert-manager does the ACME/DNS-01 work.
-- **Pre-approval** — enforced by cert-manager's
-  [`approver-policy`](https://github.com/cert-manager/approver-policy)
-  add-on, not by this service. A `pre-approved-domains`
-  `CertificateRequestPolicy` auto-approves allowlisted domains for the
-  intake API's own ServiceAccount; a permissive `manual-review` policy is
-  RBAC-bound to a human-approvers group for everything else. cert-manager
-  won't create the ACME order until the `CertificateRequest` is `Approved`.
+HTTPS needs a certificate. A CA (Let's Encrypt, etc.) only issues one after
+you prove you own the domain — here, by putting a special DNS record up.
+
+This repo is a **receptionist**. You say “I want a cert for
+`app.example.com` from Let's Encrypt.” It writes that down as a Kubernetes
+`Certificate` and stops. **cert-manager** (already in the cluster) proves
+DNS, talks to the CA, and puts `tls.crt` / `tls.key` in a Secret named
+`app-example-com-tls`. Point Ingress / a load balancer / your app at **that
+Secret**.
+
+A **bouncer** ([approver-policy](https://github.com/cert-manager/approver-policy))
+sits in front of the CA call. If the domain is on the pre-approved list, it
+waves through. If not, a human must `kubectl cert-manager approve`. Until
+then, nothing is issued.
+
+**First time** (or replacing a cert you got some other way): POST once, wait
+until Ready, swap your site over to the new Secret. You do not upload old
+PEMs — you get a **new** cert and **swap**.
+
+**Later (rollover):** do nothing. cert-manager overwrites the same Secret
+before expiry. POST again for the same domain is `409` — the ticket already
+exists. To force a rotation now: `cmctl renew`, not a second POST.
+
+## What lives where
+
+| Piece | Role |
+| --- | --- |
+| This Go API | Auth, validate `{domain, provider}`, create/get `Certificate` objects |
+| Helm chart | Installs the API, cert-manager, `approver-policy`, `ClusterIssuer`s, and `CertificateRequestPolicy`s |
+| `approver-policy` | Pre-approval gate. cert-manager will not start ACME until the `CertificateRequest` is `Approved` |
+| cert-manager | ACME DNS-01, writes the TLS Secret, renews before expiry |
+| Your DNS webhook | Implements DNS-01 for an internal/custom DNS API (or use a built-in solver: Route53, Cloudflare, …) |
+
+The API's ServiceAccount can `create`/`get` `Certificate`s only. It cannot
+read the TLS Secret. Callers poll `GET /certificates/{name}` for conditions;
+operators (or another controller) consume `{name}-tls`.
 
 `ClusterIssuer`s and `CertificateRequestPolicy`s are templated from Helm
-values — see `charts/cert-manager-proxy/values-example.yaml` for a worked
-example, and the "Deploying to a cluster" section below.
+values — see `charts/cert-manager-proxy/values-example.yaml`.
+
+```mermaid
+flowchart LR
+  caller[Caller / workflow] -->|POST /certificates| proxy[cert-manager-proxy]
+  proxy -->|create Certificate| cm[cert-manager]
+  cm -->|CertificateRequest| ap[approver-policy]
+  ap -->|Approved or wait for human| cm
+  cm -->|DNS-01| dns[DNS webhook or built-in solver]
+  dns --> ca[ACME CA]
+  ca --> cm
+  cm -->|Secret name-tls| consume[Ingress / LB / apps]
+  caller -->|GET /certificates/name| proxy
+  proxy -->|conditions only| caller
+```
+
+```mermaid
+sequenceDiagram
+  participant C as Caller
+  participant P as Proxy
+  participant CM as cert-manager
+  participant AP as approver-policy
+  participant DNS as DNS-01 solver
+  participant CA as ACME CA
+
+  C->>P: POST /certificates Bearer token
+  P->>P: Validate domain and provider
+  P->>CM: Create Certificate (issuerRef)
+  P-->>C: 202 pending-approval
+
+  CM->>CM: Create CertificateRequest
+  alt domain on pre-approved list and SA can use that policy
+    AP->>CM: Approve
+  else everything else
+    Note over AP,CM: Stays pending until kubectl cert-manager approve
+  end
+
+  CM->>CA: ACME new order
+  CM->>DNS: Set _acme-challenge TXT
+  CA->>DNS: Query TXT
+  CA-->>CM: Issue certificate
+  CM->>CM: Write Secret *-tls
+  C->>P: GET /certificates/{name}
+  P-->>C: status.conditions (Ready, Issuing, …)
+```
+
+## First issuance (obtain)
+
+Domain review happens **before** or **beside** this API, not inside it.
+
+1. Put allowlisted names in `policies.preApprovedDomains.dnsNames` (Helm
+   values), **or** leave them off the list so a human in
+   `policies.manualReview.reviewerGroup` must `kubectl cert-manager approve`.
+2. `POST /certificates` with `{"domain":"app.example.com","provider":"letsencrypt"}`
+   and `Authorization: Bearer …`.
+3. The proxy maps `provider` → `ClusterIssuer` name, sanitizes the domain
+   into a Kubernetes object name (`app.example.com` → `app-example-com`,
+   `*.example.com` → `wildcard-example-com`), and creates a `Certificate`.
+4. Response is `202 Accepted` with `status: pending-approval`. A second POST
+   for the same domain is `409 Conflict` — renewal is not a new POST (see
+   [Rollover](#rollover-renewal)).
+5. cert-manager creates a `CertificateRequest`. If the requestor's SA has
+   `use` on `pre-approved-domains` **and** the DNS names match that policy,
+   `approver-policy` auto-approves. Otherwise it waits for a reviewer.
+6. After approval, cert-manager runs ACME DNS-01, then writes Secret
+   `app-example-com-tls`.
+7. Point Ingress, a load balancer, or `kubectl get secret` at that Secret.
+
+## Rollover (renewal)
+
+Once a `Certificate` exists, **cert-manager owns rollover**. Default ACME
+certs are ~90 days; cert-manager renews at about **2/3 of the lifetime**
+(around 30 days before expiry). This API does not set `spec.duration` /
+`spec.renewBefore`, so you get those defaults.
+
+Renewal reuses the same `Certificate`, issuer, and Secret name. A new
+`CertificateRequest` still goes through `approver-policy`. Names on
+`pre-approved-domains` auto-approve; names that only match `manual-review`
+need a human again unless you add them to the allowlist.
+
+Do **not** POST again to renew. The name is derived from the domain, so
+create fails (`409` from this API).
+
+Force a rotation (compromise, “issue now”):
+
+```sh
+cmctl renew app-example-com -n cert-proxy
+```
+
+Or annotate the `Certificate` as in [cert-manager renewal](https://cert-manager.io/docs/usage/certificate/#renewal).
+The Secret is updated in place.
+
+```mermaid
+flowchart TD
+  start[Need a cert for a domain]
+  start --> exists{Certificate already in cert-proxy namespace?}
+  exists -->|no| post[POST /certificates]
+  post --> wait[Poll GET until Ready]
+  wait --> use[Use Secret name-tls]
+  exists -->|yes| renew{Just replace live TLS / approaching expiry?}
+  renew -->|cert-manager schedule| idle[Do nothing: controller renews into the same Secret]
+  renew -->|force now| cmctl[cmctl renew or cert-manager renew annotation]
+  cmctl --> use
+  idle --> use
+  renew -->|switch ACME provider| note[Not supported by POST: same name 409. Change spec.issuerRef on the Certificate or delete and recreate with care]
+```
+
+## Migrating an existing (non–cert-manager) certificate
+
+This stack always **issues a new** ACME certificate. It does not upload an
+existing PEM.
+
+1. Confirm the name is allowlisted or that a reviewer will approve.
+2. POST once; wait until `Ready`.
+3. Copy or reference Secret `{sanitized-domain}-tls` where the old cert is
+   installed.
+4. Leave the `Certificate` in place so cert-manager keeps rolling it over.
+
+Until the Secret is Ready, keep serving the old cert.
+
+## Provider names vs ClusterIssuers
+
+The HTTP `provider` field is a short alias in Go
+(`internal/certrequest/certrequest.go`), not the Helm `issuers[].name`:
+
+| `provider` in JSON | `ClusterIssuer` |
+| --- | --- |
+| `letsencrypt` | `letsencrypt-prod` |
+| `zerossl` | `zerossl-prod` |
+
+Helm `values-example.yaml` also templates an `entrust-prod` issuer. The API
+will reject `"provider":"entrust"` until that alias is added to the Go map.
+Adding a `ClusterIssuer` in values is not enough by itself.
+
+## Approval RBAC (why `disableAutoApproval` exists)
+
+The chart sets `cert-manager.disableAutoApproval: true`. Without that,
+cert-manager's built-in approver would approve every `CertificateRequest`
+and the policies would never gate issuance.
+
+- Proxy SA: `use` on policy `pre-approved-domains` only.
+- Reviewer group: `use` on policy `manual-review` (optional; off until you
+  set a real SSO group).
 
 ## Build & test
 
@@ -57,12 +222,9 @@ helm install cert-manager-proxy charts/cert-manager-proxy \
   --set auth.token=s3cret   # or auth.existingSecretName for anything real
 ```
 
-The chart sets `disableAutoApproval=true` on the cert-manager dependency —
-without that, cert-manager's built-in approver auto-approves every
-`CertificateRequest` and the whole pre-approval gate this repo exists for
-does nothing. See `charts/cert-manager-proxy/values.yaml` for the rest of
-the knobs (image, replica count, resources, existing-secret auth, disabling
-either dependency if you already run it cluster-wide).
+See `charts/cert-manager-proxy/values.yaml` for the rest of the knobs
+(image, replica count, resources, existing-secret auth, disabling either
+dependency if you already run it cluster-wide).
 
 `issuers[].dns01` in values is passed straight through to cert-manager's
 DNS-01 solver, so any provider it supports works — a built-in one
