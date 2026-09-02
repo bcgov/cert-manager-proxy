@@ -1,9 +1,0 @@
-dependencies:
-- name: cert-manager
-  repository: oci://quay.io/jetstack/charts
-  version: v1.21.1
-- name: cert-manager-approver-policy
-  repository: oci://quay.io/jetstack/charts
-  version: v0.27.0
-digest: sha256:62845474b864fc0c292d3d0532f953607b7e95cee0b2b29dc36f4706859983bc
-generated: "2026-09-02T12:30:12.906182-07:00"

@@ -1,0 +1,44 @@
+# One `helmfile apply` brings up the whole stack in the right order:
+# cert-manager, then approver-policy (needs cert-manager's CRDs/webhook),
+# then this repo's own chart (needs approver-policy's CRD). Each is a
+# separate Helm release, so there's no same-release CRD-registration race
+# to work around -- by the time a later release runs, the earlier one's
+# CRDs are already fully installed and its `wait: true` has already
+# confirmed the controller/webhook Pods are Ready.
+#
+# CERT_PROXY_TOKEN must be set in the environment before running this --
+# see README.md.
+releases:
+  - name: cert-manager
+    namespace: cert-proxy
+    chart: oci://quay.io/jetstack/charts/cert-manager
+    version: v1.21.1
+    wait: true
+    set:
+      - name: crds.enabled
+        value: true
+      # Required: without this, cert-manager's built-in approver
+      # auto-approves every CertificateRequest regardless of
+      # approver-policy, defeating the pre-approval gate this repo exists
+      # for.
+      - name: disableAutoApproval
+        value: true
+
+  - name: cert-manager-approver-policy
+    namespace: cert-proxy
+    chart: oci://quay.io/jetstack/charts/cert-manager-approver-policy
+    version: v0.27.0
+    wait: true
+    needs:
+      - cert-proxy/cert-manager
+
+  - name: cert-manager-proxy
+    namespace: cert-proxy
+    chart: ./charts/cert-manager-proxy
+    needs:
+      - cert-proxy/cert-manager-approver-policy
+    values:
+      - ./charts/cert-manager-proxy/values-example.yaml
+    set:
+      - name: auth.token
+        value: "{{ requiredEnv \"CERT_PROXY_TOKEN\" }}"

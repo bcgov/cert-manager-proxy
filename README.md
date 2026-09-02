@@ -37,41 +37,47 @@ go test ./...
 
 ## Deploying to a cluster
 
-`charts/cert-manager-proxy` is a Helm chart for the whole stack: the proxy
-itself, plus cert-manager and `approver-policy` as chart dependencies (both
-pulled from `oci://quay.io/jetstack/charts` — nothing vendored), plus your
-`ClusterIssuer`s and `CertificateRequestPolicy`s templated from values. No
-separate `kubectl apply` step — but it is two `helm` commands, not one:
+`helmfile.yaml` brings up the whole stack with one command: cert-manager,
+then `approver-policy`, then this repo's own chart
+(`charts/cert-manager-proxy`) with your `ClusterIssuer`s/
+`CertificateRequestPolicy`s templated from values. Each is a genuinely
+separate Helm release, applied in dependency order with `wait: true`
+between them — not a workaround, just no same-release CRD-registration
+race to begin with (a single chart that both installs a CRD *and* creates
+instances of it hits exactly that race; confirmed against a real cluster
+in `test/integration`, which is also why this repo isn't structured that
+way).
 
 ```sh
-helm dependency build charts/cert-manager-proxy
+brew install helmfile   # or see https://helmfile.readthedocs.io
 
-# Phase 1: cert-manager + approver-policy + the proxy. No issuers/policies
-# yet -- their CRDs don't exist until this phase finishes, and Helm
-# validates every resource's GVK against the API server up front, so
-# creating instances of a CRD type in the same install that defines the
-# CRD fails outright (this is exactly what cert-manager's own docs warn
-# against; confirmed against a real cluster in test/integration).
-helm install cert-manager-proxy charts/cert-manager-proxy \
-  --namespace cert-proxy --create-namespace \
-  --set auth.token=s3cret   # or auth.existingSecretName for anything real
-
-# wait for cert-manager to actually be Ready (its CRDs are registered by
-# then), then:
-
-# Phase 2: now that the CRDs exist, add the ClusterIssuers/
-# CertificateRequestPolicies.
-helm upgrade cert-manager-proxy charts/cert-manager-proxy \
-  --namespace cert-proxy --reuse-values \
-  --values charts/cert-manager-proxy/values-example.yaml
+export CERT_PROXY_TOKEN=s3cret   # or use auth.existingSecretName in values-example.yaml for anything real
+helmfile sync
 ```
 
-The chart sets `disableAutoApproval=true` on the cert-manager dependency —
-without that, cert-manager's built-in approver auto-approves every
-`CertificateRequest` and the whole pre-approval gate this repo exists for
-does nothing. See `charts/cert-manager-proxy/values.yaml` for the rest of
-the knobs (image, replica count, resources, existing-secret auth, disabling
-either dependency if you already run it cluster-wide).
+`helmfile.yaml` sets `disableAutoApproval=true` on the cert-manager
+release — without that, cert-manager's built-in approver auto-approves
+every `CertificateRequest` and the whole pre-approval gate this repo
+exists for does nothing. See `charts/cert-manager-proxy/values.yaml` for
+the rest of this chart's own knobs (image, replica count, resources,
+existing-secret auth).
+
+Don't want another CLI dependency? `charts/cert-manager-proxy` also works
+as a plain Helm chart — install cert-manager and approver-policy yourself
+first (see `helmfile.yaml` for the exact chart refs/versions/values this
+repo uses), then:
+
+```sh
+helm install cert-manager-proxy charts/cert-manager-proxy \
+  --namespace cert-proxy --create-namespace \
+  --values charts/cert-manager-proxy/values-example.yaml \
+  --set auth.token=s3cret
+```
+
+That's one command too — this chart no longer bundles cert-manager/
+approver-policy as dependencies, so as long as they're already installed
+(from a prior, separate release) there's no CRD-timing race for this
+chart's own `helm install` to hit.
 
 `issuers[].dns01` in values is passed straight through to cert-manager's
 DNS-01 solver, so any provider it supports works — a built-in one

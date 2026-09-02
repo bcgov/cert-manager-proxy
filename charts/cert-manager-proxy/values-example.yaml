@@ -5,12 +5,14 @@
 # SSO group. Every REPLACE_ME_* value is a placeholder -- copy this file
 # and fill in your real values.
 #
-# Pass it with `helm upgrade --reuse-values -f`, not `helm install -f`:
-# this file's ClusterIssuers/CertificateRequestPolicies are instances of
-# CRD types that cert-manager/approver-policy (chart dependencies) define.
-# Their CRDs must already be registered with the API server before Helm
-# can create instances of them in the same release -- see the "Deploying
-# to a cluster" section of the README for the full two-phase sequence.
+# This file's ClusterIssuers/CertificateRequestPolicies are instances of
+# CRD types that cert-manager/approver-policy define -- they must already
+# be installed (see ../../helmfile.yaml, or the README's "Deploying to a
+# cluster" section) before applying this, same as any other cert-manager
+# user of those CRDs. Once they are, `helm install -f`/`helm upgrade -f`
+# both just work -- this chart doesn't bundle cert-manager/approver-policy
+# itself, so there's no same-release CRD-registration race to sequence
+# around.
 #
 # The webhook itself is a separate service you write and deploy (it's what
 # actually talks to your DNS provider's API) -- cert-manager just calls it.

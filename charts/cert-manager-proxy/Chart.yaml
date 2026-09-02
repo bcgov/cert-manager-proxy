@@ -7,12 +7,3 @@ appVersion: "0.1.0"
 home: https://github.com/bcgov/cert-manager-proxy
 sources:
   - https://github.com/bcgov/cert-manager-proxy
-dependencies:
-  - name: cert-manager
-    version: "v1.21.1"
-    repository: "oci://quay.io/jetstack/charts"
-    condition: cert-manager.enabled
-  - name: cert-manager-approver-policy
-    version: "v0.27.0"
-    repository: "oci://quay.io/jetstack/charts"
-    condition: approverPolicyEnabled
