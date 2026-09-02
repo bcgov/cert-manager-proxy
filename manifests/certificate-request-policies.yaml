@@ -1,4 +1,5 @@
-# Requires the cert-manager `approver-policy` add-on installed (it replaces
+# Requires the cert-manager `approver-policy` add-on (see
+# scripts/bootstrap-cluster.sh, or install it yourself — it replaces
 # cert-manager's default auto-approve controller).
 #
 # Auto-approve, but only for domains that already cleared out-of-band

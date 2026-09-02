@@ -34,10 +34,25 @@ go build ./...
 go test ./...
 ```
 
+## Cluster setup
+
+`scripts/bootstrap-cluster.sh` installs cert-manager and `approver-policy`
+(pinned Helm chart versions) on whatever cluster your kubeconfig points at,
+then applies `manifests/`:
+
+```sh
+./scripts/bootstrap-cluster.sh
+```
+
+It sets `disableAutoApproval=true` on the cert-manager install — without
+that, cert-manager's built-in approver auto-approves every
+`CertificateRequest` and the whole pre-approval gate this repo exists for
+does nothing.
+
 ## Run
 
 Requires a kubeconfig (or in-cluster config) with access to a cluster that
-has cert-manager and `approver-policy` installed.
+has cert-manager and `approver-policy` installed (see Cluster setup above).
 
 `CERT_PROXY_TOKEN` is required — the server refuses to start without it.
 It's a single shared bearer token, fine for one trusted caller; see the
@@ -66,4 +81,3 @@ EKS, skip static AWS keys entirely and use IRSA instead (see the comment in
 ## Not done yet
 
 - Deployment manifests for the proxy itself (Deployment/Service/SA)
-- `approver-policy` Helm install instructions
