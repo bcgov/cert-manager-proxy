@@ -106,11 +106,7 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
-      - name: Cache Trivy DB
-        uses: actions/cache@v6
-        with:
-          path: .trivycache
-          key: ${{ runner.os }}-trivy-${{ hashFiles('.github/workflows/analysis.yml') }}
+      # trivy-action caches .trivycache internally.
 
       # Reports every severity to the Security tab for triage. Findings are not a
       # merge gate: advisories are published on their own schedule, not the
