@@ -1,5 +1,13 @@
+{{- /*
+Always suffixed, deliberately -- cert-manager's own chart uses the common
+Helm "if contains .Chart.Name .Release.Name" fullname pattern, which
+collapses to bare .Release.Name whenever the release name contains
+"cert-manager" as a substring. "cert-manager-proxy" does, so an unsuffixed
+fullname here would collide with cert-manager's own Deployment name under
+the release name this chart is documented to be installed with.
+*/ -}}
 {{- define "cert-manager-proxy.fullname" -}}
-{{- .Release.Name | trunc 63 | trimSuffix "-" -}}
+{{- printf "%s-intake" .Release.Name | trunc 63 | trimSuffix "-" -}}
 {{- end -}}
 
 {{- define "cert-manager-proxy.labels" -}}

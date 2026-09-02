@@ -45,7 +45,7 @@ exists. To force a rotation now: `cmctl renew`, not a second POST.
 | Piece | Role |
 | --- | --- |
 | This Go API | Auth, validate `{domain, provider}`, create/get `Certificate` objects |
-| Helm chart | Installs the API, cert-manager, `approver-policy`, `ClusterIssuer`s, and `CertificateRequestPolicy`s |
+| Helmfile + this chart | Helmfile installs cert-manager, then `approver-policy`, then this chart (API + `ClusterIssuer`s + `CertificateRequestPolicy`s). The chart does not install cert-manager. |
 | `approver-policy` | Pre-approval gate. cert-manager will not start ACME until the `CertificateRequest` is `Approved` |
 | cert-manager | ACME DNS-01, writes the TLS Secret, renews before expiry |
 | Your DNS webhook | Implements DNS-01 for an internal/custom DNS API (or use a built-in solver: Route53, Cloudflare, …) |
@@ -191,9 +191,9 @@ Adding a `ClusterIssuer` in values is not enough by itself.
 
 ## Approval RBAC (why `disableAutoApproval` exists)
 
-The chart sets `cert-manager.disableAutoApproval: true`. Without that,
-cert-manager's built-in approver would approve every `CertificateRequest`
-and the policies would never gate issuance.
+`helmfile.yaml` sets `disableAutoApproval: true` on the cert-manager
+release. Without that, cert-manager's built-in approver would approve
+every `CertificateRequest` and the policies would never gate issuance.
 
 - Proxy SA: `use` on policy `pre-approved-domains` only.
 - Reviewer group: `use` on policy `manual-review` (optional; off until you
@@ -208,23 +208,47 @@ go test ./...
 
 ## Deploying to a cluster
 
-`charts/cert-manager-proxy` is a Helm chart for the whole stack: the proxy
-itself, plus cert-manager and `approver-policy` as chart dependencies (both
-pulled from `oci://quay.io/jetstack/charts` — nothing vendored), plus your
-`ClusterIssuer`s and `CertificateRequestPolicy`s templated from values. One
-`helm install`, no separate `kubectl apply` step.
+`helmfile.yaml` brings up the whole stack with one command: cert-manager,
+then `approver-policy`, then this repo's own chart
+(`charts/cert-manager-proxy`) with your `ClusterIssuer`s/
+`CertificateRequestPolicy`s templated from values. Each is a genuinely
+separate Helm release, applied in dependency order with `wait: true`
+between them — not a workaround, just no same-release CRD-registration
+race to begin with (a single chart that both installs a CRD *and* creates
+instances of it hits exactly that race; confirmed against a real cluster
+in `test/integration`, which is also why this repo isn't structured that
+way).
 
 ```sh
-helm dependency build charts/cert-manager-proxy
+brew install helmfile   # or see https://helmfile.readthedocs.io
+
+export CERT_PROXY_TOKEN=s3cret   # or use auth.existingSecretName in values-example.yaml for anything real
+helmfile sync
+```
+
+`helmfile.yaml` sets `disableAutoApproval=true` on the cert-manager
+release — without that, cert-manager's built-in approver auto-approves
+every `CertificateRequest` and the whole pre-approval gate this repo
+exists for does nothing. See `charts/cert-manager-proxy/values.yaml` for
+the rest of this chart's own knobs (image, replica count, resources,
+existing-secret auth).
+
+Don't want another CLI dependency? `charts/cert-manager-proxy` also works
+as a plain Helm chart — install cert-manager and approver-policy yourself
+first (see `helmfile.yaml` for the exact chart refs/versions/values this
+repo uses), then:
+
+```sh
 helm install cert-manager-proxy charts/cert-manager-proxy \
   --namespace cert-proxy --create-namespace \
   --values charts/cert-manager-proxy/values-example.yaml \
-  --set auth.token=s3cret   # or auth.existingSecretName for anything real
+  --set auth.token=s3cret
 ```
 
-See `charts/cert-manager-proxy/values.yaml` for the rest of the knobs
-(image, replica count, resources, existing-secret auth, disabling either
-dependency if you already run it cluster-wide).
+That's one command too — this chart no longer bundles cert-manager/
+approver-policy as dependencies, so as long as they're already installed
+(from a prior, separate release) there's no CRD-timing race for this
+chart's own `helm install` to hit.
 
 `issuers[].dns01` in values is passed straight through to cert-manager's
 DNS-01 solver, so any provider it supports works — a built-in one

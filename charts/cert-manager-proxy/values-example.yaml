@@ -2,8 +2,17 @@
 # DNS-01 solver (for an internal/custom DNS provider -- not one of
 # cert-manager's built-ins like Route53/Cloudflare/Azure DNS), plus a
 # pre-approved-domains allowlist and a manual-review fallback bound to an
-# SSO group. Every REPLACE_ME_* value is a placeholder -- copy this file,
-# fill in your real values, and pass it with `helm install -f`.
+# SSO group. Every REPLACE_ME_* value is a placeholder -- copy this file
+# and fill in your real values.
+#
+# This file's ClusterIssuers/CertificateRequestPolicies are instances of
+# CRD types that cert-manager/approver-policy define -- they must already
+# be installed (see ../../helmfile.yaml, or the README's "Deploying to a
+# cluster" section) before applying this, same as any other cert-manager
+# user of those CRDs. Once they are, `helm install -f`/`helm upgrade -f`
+# both just work -- this chart doesn't bundle cert-manager/approver-policy
+# itself, so there's no same-release CRD-registration race to sequence
+# around.
 #
 # The webhook itself is a separate service you write and deploy (it's what
 # actually talks to your DNS provider's API) -- cert-manager just calls it.

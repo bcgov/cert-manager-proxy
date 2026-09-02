@@ -1,8 +1,8 @@
 cert-manager-proxy is deployed.
 
-This chart also installed cert-manager and approver-policy as dependencies
-(disable either via --set cert-manager.enabled=false /
---set approverPolicyEnabled=false if you already run them cluster-wide).
+This chart expects cert-manager and approver-policy to already be running
+in the cluster (it doesn't install them) -- see helmfile.yaml in the repo
+root, which installs both first, then this chart.
 
 {{- if not .Values.issuers }}
 
