@@ -29,6 +29,12 @@ spec:
 # to it, i.e. human approvers in policies.manualReview.reviewerGroup. They
 # approve pending CertificateRequests directly:
 # `kubectl cert-manager approve <name>`.
+#
+# dnsNames.required stays false (not true): approver-policy's admission
+# webhook rejects `required: true` unless `values` or `validations` is also
+# set -- but this policy is meant to not constrain domains at all, so
+# there's nothing to list. RBAC on who can use this policy is the actual
+# gate, not domain matching.
 apiVersion: policy.cert-manager.io/v1alpha1
 kind: CertificateRequestPolicy
 metadata:
@@ -40,7 +46,7 @@ spec:
     commonName:
       required: false
     dnsNames:
-      required: true
+      required: false
   selector:
     issuerRef:
       group: "cert-manager.io"

@@ -8,7 +8,9 @@ This chart also installed cert-manager and approver-policy as dependencies
 
 No issuers or policies are configured (issuers/policies.* are empty), so no
 ClusterIssuer or CertificateRequestPolicy was created -- nothing can be
-issued yet. See values-example.yaml for a worked example, then:
+issued yet. See values-example.yaml for a worked example, then, once
+cert-manager is Ready (its CRDs need to exist before Helm can create
+instances of them in the same release):
 
   helm upgrade {{ .Release.Name }} <chart> --reuse-values -f my-values.yaml
 {{- end }}
