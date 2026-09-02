@@ -6,11 +6,13 @@
 package main
 
 import (
+	"crypto/subtle"
 	"encoding/json"
 	"errors"
 	"log"
 	"net/http"
 	"os"
+	"strings"
 
 	"github.com/conbrad/cert-manager-proxy/internal/certrequest"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -24,6 +26,10 @@ import (
 func main() {
 	namespace := envOr("CERT_PROXY_NAMESPACE", "cert-proxy")
 	addr := envOr("CERT_PROXY_ADDR", ":8080")
+	token := os.Getenv("CERT_PROXY_TOKEN")
+	if token == "" {
+		log.Fatal("CERT_PROXY_TOKEN must be set (refusing to start without auth)")
+	}
 
 	config, err := loadKubeConfig()
 	if err != nil {
@@ -42,7 +48,23 @@ func main() {
 	mux.HandleFunc("GET /certificates/{name}", s.get)
 
 	log.Printf("cert-proxy listening on %s (namespace=%s)", addr, namespace)
-	log.Fatal(http.ListenAndServe(addr, mux))
+	log.Fatal(http.ListenAndServe(addr, requireBearerToken(token, mux)))
+}
+
+// requireBearerToken is a single shared secret compared in constant time.
+// ponytail: fine for one trusted caller (the pre-approval workflow); once
+// there are multiple callers needing distinct identities, replace with
+// Kubernetes TokenReview/SubjectAccessReview (or a kube-rbac-proxy sidecar)
+// so RBAC — already the approval mechanism — also drives authn/z here.
+func requireBearerToken(token string, next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		got := strings.TrimPrefix(r.Header.Get("Authorization"), "Bearer ")
+		if got == "" || subtle.ConstantTimeCompare([]byte(got), []byte(token)) != 1 {
+			http.Error(w, "unauthorized", http.StatusUnauthorized)
+			return
+		}
+		next.ServeHTTP(w, r)
+	})
 }
 
 type server struct {

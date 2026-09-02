@@ -1,8 +1,6 @@
 # cert-manager-proxy
 
-> **Experimental.** Untested against a real cluster, no auth on the intake
-> API, credentials in the example manifests are placeholders. Do not deploy
-> as-is.
+> **Experimental.** Untested against a real cluster. Do not deploy as-is.
 
 A thin intake API in front of [cert-manager](https://cert-manager.io/) that
 lets you request certificates from multiple ACME providers (DNS-01 only)
@@ -36,20 +34,31 @@ go test ./...
 Requires a kubeconfig (or in-cluster config) with access to a cluster that
 has cert-manager and `approver-policy` installed.
 
+`CERT_PROXY_TOKEN` is required — the server refuses to start without it.
+It's a single shared bearer token, fine for one trusted caller; see the
+`ponytail:` comment on `requireBearerToken` in `main.go` for the upgrade
+path (Kubernetes TokenReview/SubjectAccessReview, or a kube-rbac-proxy
+sidecar) once there are multiple callers needing distinct identities.
+
 ```sh
-go run ./cmd/cert-manager-proxy
+CERT_PROXY_TOKEN=s3cret go run ./cmd/cert-manager-proxy
 ```
 
 ```sh
 curl -X POST localhost:8080/certificates \
+  -H "Authorization: Bearer s3cret" \
   -d '{"domain":"app.example.com","provider":"letsencrypt"}'
 
-curl localhost:8080/certificates/app-example-com
+curl -H "Authorization: Bearer s3cret" localhost:8080/certificates/app-example-com
 ```
+
+Every `REPLACE_ME_*` value in `manifests/` is a placeholder — the real
+secret material (account keys, EAB HMAC key, Route53 secret access key) is
+already kept out of these files via `*SecretRef`s to Kubernetes Secrets. On
+EKS, skip static AWS keys entirely and use IRSA instead (see the comment in
+`cluster-issuers.yaml`).
 
 ## Not done yet
 
 - Deployment manifests for the proxy itself (Deployment/Service/SA)
-- Auth on the intake API
 - `approver-policy` Helm install instructions
-- Real DNS provider credentials (Route53 keys in `manifests/` are examples)
