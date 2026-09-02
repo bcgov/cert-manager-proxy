@@ -11,6 +11,12 @@ A thin intake API in front of [cert-manager](https://cert-manager.io/) that
 lets you request certificates from multiple ACME providers (DNS-01 only)
 behind an out-of-band pre-approval gate.
 
+**Obtain:** `POST /certificates` creates a cert-manager `Certificate`. After
+approval, ACME DNS-01 fills Secret `{name}-tls`. **Rollover:** do not POST
+again (that is a `409`); cert-manager renews the same object/Secret. Full
+flow, diagrams, and how to replace an existing SSL cert:
+[docs/certificate-lifecycle.md](docs/certificate-lifecycle.md).
+
 ## How it works
 
 - **Multi-provider** — one `ClusterIssuer` per ACME CA (Let's Encrypt,
