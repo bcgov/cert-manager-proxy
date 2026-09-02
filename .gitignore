@@ -2,7 +2,9 @@
 coverage.out
 
 # never commit real credentials
-kubeconfig*
+kubeconfig
+kubeconfig.yaml
+kubeconfig.yml
 *.pem
 *.key
 .env

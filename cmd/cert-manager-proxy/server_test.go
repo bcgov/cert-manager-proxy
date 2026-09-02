@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -12,6 +13,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	dynamicfake "k8s.io/client-go/dynamic/fake"
+	ktesting "k8s.io/client-go/testing"
 )
 
 const testNamespace = "cert-proxy"
@@ -85,6 +87,23 @@ func TestServerCreate_AlreadyExists(t *testing.T) {
 	}
 }
 
+func TestServerCreate_GenericError(t *testing.T) {
+	s := newTestServer()
+	fake := s.client.(*dynamicfake.FakeDynamicClient)
+	fake.PrependReactor("create", certrequest.Resource, func(ktesting.Action) (bool, runtime.Object, error) {
+		return true, nil, errors.New("kube api unavailable")
+	})
+
+	body, _ := json.Marshal(certrequest.Request{Domain: "app.example.com", Provider: "letsencrypt"})
+	req := httptest.NewRequest(http.MethodPost, "/certificates", bytes.NewReader(body))
+	rec := httptest.NewRecorder()
+	s.create(rec, req)
+
+	if rec.Code != http.StatusBadGateway {
+		t.Fatalf("status = %d, want %d, body=%s", rec.Code, http.StatusBadGateway, rec.Body)
+	}
+}
+
 func TestServerGet(t *testing.T) {
 	existing := certrequest.BuildCertificate(testNamespace, certrequest.Request{Domain: "app.example.com", Provider: "letsencrypt"})
 	unstructured.SetNestedField(existing.Object, []interface{}{
@@ -121,6 +140,23 @@ func TestServerGet_NotFound(t *testing.T) {
 
 	if rec.Code != http.StatusNotFound {
 		t.Fatalf("status = %d, want %d", rec.Code, http.StatusNotFound)
+	}
+}
+
+func TestServerGet_GenericError(t *testing.T) {
+	s := newTestServer()
+	fake := s.client.(*dynamicfake.FakeDynamicClient)
+	fake.PrependReactor("get", certrequest.Resource, func(ktesting.Action) (bool, runtime.Object, error) {
+		return true, nil, errors.New("kube api unavailable")
+	})
+
+	req := httptest.NewRequest(http.MethodGet, "/certificates/app-example-com", nil)
+	req.SetPathValue("name", "app-example-com")
+	rec := httptest.NewRecorder()
+	s.get(rec, req)
+
+	if rec.Code != http.StatusBadGateway {
+		t.Fatalf("status = %d, want %d, body=%s", rec.Code, http.StatusBadGateway, rec.Body)
 	}
 }
 
