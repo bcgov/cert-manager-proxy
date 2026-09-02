@@ -1,0 +1,35 @@
+name: PR Validate
+
+on:
+  pull_request:
+    types: [edited, opened, synchronize, reopened, ready_for_review]
+
+concurrency:
+  group: ${{ github.workflow }}-edit-${{ github.event.number }}
+  cancel-in-progress: true
+
+permissions: {}
+
+jobs:
+  validate:
+    name: Validate PR
+    if: (! github.event.pull_request.draft)
+    permissions:
+      pull-requests: write
+    uses: bcgov/quickstart-openshift-helpers/.github/workflows/.pr-validate.yml@a11ad3d1b9288fb40757c4314a62eb86ff227931 # v1.2.1
+    with:
+      # Helper input is inverted: 'true' skips the fork-fail step. Public repo, forks OK.
+      reject_forks: true
+
+  # Required-check stable name. Skipped draft validate must not look like a failed gate.
+  results:
+    name: Validate Results
+    if: always()
+    needs: [validate]
+    runs-on: ubuntu-slim
+    timeout-minutes: 1
+    steps:
+      - name: Evaluate
+        if: contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled')
+        run: exit 1
+      - run: echo "Success!"
