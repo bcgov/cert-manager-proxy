@@ -9,6 +9,7 @@ import (
 	"crypto/subtle"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"log"
 	"net/http"
 	"os"
@@ -24,31 +25,46 @@ import (
 )
 
 func main() {
+	if err := run(); err != nil {
+		log.Fatal(err)
+	}
+}
+
+// run does the real work; split out from main so it can return an error
+// instead of calling log.Fatal, which a test can't observe.
+func run() error {
 	namespace := envOr("CERT_PROXY_NAMESPACE", "cert-proxy")
 	addr := envOr("CERT_PROXY_ADDR", ":8080")
 	token := os.Getenv("CERT_PROXY_TOKEN")
 	if token == "" {
-		log.Fatal("CERT_PROXY_TOKEN must be set (refusing to start without auth)")
+		return errors.New("CERT_PROXY_TOKEN must be set (refusing to start without auth)")
 	}
 
 	config, err := loadKubeConfig()
 	if err != nil {
-		log.Fatalf("loading kube config: %v", err)
+		return fmt.Errorf("loading kube config: %w", err)
 	}
 	client, err := dynamic.NewForConfig(config)
 	if err != nil {
-		log.Fatalf("building dynamic client: %v", err)
+		return fmt.Errorf("building dynamic client: %w", err)
 	}
-	gvr := schema.GroupVersionResource{Group: certrequest.Group, Version: certrequest.Version, Resource: certrequest.Resource}
 
+	log.Printf("cert-proxy listening on %s (namespace=%s)", addr, namespace)
+	return http.ListenAndServe(addr, newHandler(client, namespace, token))
+}
+
+// newHandler wires the mux and auth middleware together. Split out from run
+// so it can be tested end-to-end (routing + middleware) against a fake
+// dynamic client, without a real cluster or a blocking ListenAndServe.
+func newHandler(client dynamic.Interface, namespace, token string) http.Handler {
+	gvr := schema.GroupVersionResource{Group: certrequest.Group, Version: certrequest.Version, Resource: certrequest.Resource}
 	s := &server{client: client, gvr: gvr, namespace: namespace}
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("POST /certificates", s.create)
 	mux.HandleFunc("GET /certificates/{name}", s.get)
 
-	log.Printf("cert-proxy listening on %s (namespace=%s)", addr, namespace)
-	log.Fatal(http.ListenAndServe(addr, requireBearerToken(token, mux)))
+	return requireBearerToken(token, mux)
 }
 
 // requireBearerToken is a single shared secret compared in constant time.
