@@ -1,0 +1,42 @@
+# Requires the cert-manager `approver-policy` add-on installed (it replaces
+# cert-manager's default auto-approve controller).
+#
+# Auto-approve, but only for domains that already cleared out-of-band
+# pre-validation (allowlisted here). Bound below to the intake API's
+# ServiceAccount only.
+apiVersion: policy.cert-manager.io/v1alpha1
+kind: CertificateRequestPolicy
+metadata:
+  name: pre-approved-domains
+spec:
+  allowed:
+    commonName:
+      required: false
+    dnsNames:
+      required: true
+      values:
+        - "*.example.com"
+        - "example.com"
+  selector:
+    issuerRef:
+      group: "cert-manager.io"
+      kind: "ClusterIssuer"
+      name: "*"
+---
+# The manual-review path. Deliberately permissive on domains; it's gated
+# entirely by who is RBAC-bound to it, i.e. human approvers.
+apiVersion: policy.cert-manager.io/v1alpha1
+kind: CertificateRequestPolicy
+metadata:
+  name: manual-review
+spec:
+  allowed:
+    commonName:
+      required: false
+    dnsNames:
+      required: true
+  selector:
+    issuerRef:
+      group: "cert-manager.io"
+      kind: "ClusterIssuer"
+      name: "*"

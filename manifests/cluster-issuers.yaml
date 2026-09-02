@@ -1,0 +1,54 @@
+# One ClusterIssuer per ACME CA/provider. DNS-01 via Route53 shown; swap the
+# `route53` block for cloudflare/azuredns/clouddns/webhook per provider.
+apiVersion: cert-manager.io/v1
+kind: ClusterIssuer
+metadata:
+  name: letsencrypt-prod
+spec:
+  acme:
+    server: https://acme-v02.api.letsencrypt.org/directory
+    email: certs@example.com
+    privateKeySecretRef:
+      name: letsencrypt-prod-account-key
+    solvers:
+      - dns01:
+          route53:
+            region: us-east-1
+            hostedZoneID: Z1234567890ABC
+            accessKeyID: AKIAEXAMPLE
+            secretAccessKeySecretRef:
+              name: route53-credentials
+              key: secret-access-key
+        selector:
+          dnsZones:
+            - "example.com"
+---
+# Second provider, same shape — this is what makes it multi-provider: pick
+# the ClusterIssuer by name from the intake API, nothing else changes.
+apiVersion: cert-manager.io/v1
+kind: ClusterIssuer
+metadata:
+  name: zerossl-prod
+spec:
+  acme:
+    server: https://acme.zerossl.com/v2/DV90
+    email: certs@example.com
+    externalAccountBinding:
+      keyID: EAB_KEY_ID
+      keySecretRef:
+        name: zerossl-eab-key
+        key: secret
+    privateKeySecretRef:
+      name: zerossl-prod-account-key
+    solvers:
+      - dns01:
+          route53:
+            region: us-east-1
+            hostedZoneID: Z1234567890ABC
+            accessKeyID: AKIAEXAMPLE
+            secretAccessKeySecretRef:
+              name: route53-credentials
+              key: secret-access-key
+        selector:
+          dnsZones:
+            - "example.com"
