@@ -1,4 +1,4 @@
-module github.com/conbrad/cert-proxy
+module github.com/conbrad/cert-manager-proxy
 
 go 1.22.0
 

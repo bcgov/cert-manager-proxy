@@ -1,4 +1,4 @@
-// cert-proxy is the intake API in front of cert-manager: it accepts a
+// cert-manager-proxy is the intake API in front of cert-manager: it accepts a
 // certificate request, picks the right ClusterIssuer for the requested
 // provider, and creates a Certificate object. Approval (pre-validation)
 // is enforced by cert-manager's approver-policy, not this service — see
@@ -12,7 +12,7 @@ import (
 	"net/http"
 	"os"
 
-	"github.com/conbrad/cert-proxy/internal/certrequest"
+	"github.com/conbrad/cert-manager-proxy/internal/certrequest"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
