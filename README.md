@@ -1,8 +1,8 @@
 # cert-manager-proxy
 
-[![Issues](https://img.shields.io/github/issues/bcgov/cert-manager-proxy.svg?style=for-the-badge)](/../../issues)
-[![Apache 2.0 License](https://img.shields.io/github/license/bcgov/cert-manager-proxy.svg?style=for-the-badge)](/LICENSE)
-[![Lifecycle](https://img.shields.io/badge/Lifecycle-Experimental-339999?style=for-the-badge)](https://github.com/bcgov/repomountie/blob/master/doc/lifecycle-badges.md)
+[![Issues](https://img.shields.io/github/issues/bcgov/cert-manager-proxy.svg)](/../../issues)
+[![Apache 2.0 License](https://img.shields.io/github/license/bcgov/cert-manager-proxy.svg)](/LICENSE)
+[![Lifecycle](https://img.shields.io/badge/Lifecycle-Experimental-339999)](https://github.com/bcgov/repomountie/blob/master/doc/lifecycle-badges.md)
 [![codecov](https://codecov.io/gh/bcgov/cert-manager-proxy/branch/main/graph/badge.svg)](https://codecov.io/gh/bcgov/cert-manager-proxy)
 
 > **Experimental.** Untested against a real cluster. Do not deploy as-is.
