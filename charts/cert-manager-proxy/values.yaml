@@ -34,6 +34,10 @@ resources: {}
 # Let's Encrypt + ZeroSSL + Entrust example, via a webhook DNS-01 solver
 # (for an internal/custom DNS provider -- swap dns01.webhook for
 # dns01.route53/cloudflare/azuredns/clouddns for a built-in provider).
+#
+# Requires cert-manager's ClusterIssuer CRD to already exist -- this chart
+# doesn't install cert-manager itself (see ../../helmfile.yaml, which
+# installs cert-manager + approver-policy first, then this chart).
 issuers: []
 # - name: letsencrypt-prod
 #   server: https://acme-v02.api.letsencrypt.org/directory
@@ -46,32 +50,8 @@ issuers: []
 #       config: {}  # whatever your webhook implementation expects
 
 policies:
-  # -- Domains that auto-approve via approver-policy once they've cleared
-  # your out-of-band pre-validation. Empty means the policy (and the
-  # auto-approval it grants) isn't created at all.
   preApprovedDomains:
     dnsNames: []
-  # -- Everything outside preApprovedDomains falls back to this policy,
-  # which is deliberately permissive on domains -- gated entirely by RBAC.
-  # Disabled by default since it needs a real SSO/IdP group name.
   manualReview:
     enabled: false
     reviewerGroup: ""
-
-# -- cert-manager is installed as a chart dependency (oci://quay.io/jetstack/charts).
-# disableAutoApproval is required: without it cert-manager's built-in
-# approver auto-approves every CertificateRequest, bypassing approver-policy
-# entirely and defeating the pre-approval gate this whole proxy exists for.
-cert-manager:
-  enabled: true
-  crds:
-    enabled: true
-  disableAutoApproval: true
-
-# -- approver-policy is installed as a chart dependency; it's what actually
-# enforces the pre-approval gate via the CertificateRequestPolicy + RBAC
-# templated from issuers/policies above.
-# (Its own values.schema.json rejects an unknown "enabled" key, so the
-# install toggle lives here rather than nested under cert-manager-approver-policy:.)
-approverPolicyEnabled: true
-cert-manager-approver-policy: {}

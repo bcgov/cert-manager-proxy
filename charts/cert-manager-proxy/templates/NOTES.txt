@@ -1,16 +1,14 @@
 cert-manager-proxy is deployed.
 
-This chart also installed cert-manager and approver-policy as dependencies
-(disable either via --set cert-manager.enabled=false /
---set approverPolicyEnabled=false if you already run them cluster-wide).
+This chart expects cert-manager and approver-policy to already be running
+in the cluster (it doesn't install them) -- see helmfile.yaml in the repo
+root, which installs both first, then this chart.
 
 {{- if not .Values.issuers }}
 
 No issuers or policies are configured (issuers/policies.* are empty), so no
 ClusterIssuer or CertificateRequestPolicy was created -- nothing can be
-issued yet. See values-example.yaml for a worked example, then, once
-cert-manager is Ready (its CRDs need to exist before Helm can create
-instances of them in the same release):
+issued yet. See values-example.yaml for a worked example, then:
 
   helm upgrade {{ .Release.Name }} <chart> --reuse-values -f my-values.yaml
 {{- end }}

@@ -1,9 +1,6 @@
 /bin/
 coverage.out
 
-# downloaded Helm dependency archives (regenerated via `helm dependency build`)
-charts/cert-manager-proxy/charts/*.tgz
-
 # never commit real credentials
 kubeconfig
 kubeconfig.yaml
