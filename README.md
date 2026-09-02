@@ -1,5 +1,9 @@
 # cert-manager-proxy
 
+[![Issues](https://img.shields.io/github/issues/bcgov/cert-manager-proxy.svg?style=for-the-badge)](/../../issues)
+[![Apache 2.0 License](https://img.shields.io/github/license/bcgov/cert-manager-proxy.svg?style=for-the-badge)](/LICENSE)
+[![Lifecycle](https://img.shields.io/badge/Lifecycle-Experimental-339999?style=for-the-badge)](https://github.com/bcgov/repomountie/blob/master/doc/lifecycle-badges.md)
+
 > **Experimental.** Untested against a real cluster. Do not deploy as-is.
 
 A thin intake API in front of [cert-manager](https://cert-manager.io/) that
