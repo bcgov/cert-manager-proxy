@@ -1,1 +1,7 @@
 /bin/
+
+# never commit real credentials
+kubeconfig*
+*.pem
+*.key
+.env
