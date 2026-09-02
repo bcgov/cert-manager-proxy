@@ -31,20 +31,19 @@ resources: {}
 
 # -- One ClusterIssuer per entry. Empty by default -- nothing is created
 # until you configure at least one. See values-example.yaml for a worked
-# Let's Encrypt + ZeroSSL (via Route53 DNS-01) example.
+# Let's Encrypt + ZeroSSL + Entrust example, via a webhook DNS-01 solver
+# (for an internal/custom DNS provider -- swap dns01.webhook for
+# dns01.route53/cloudflare/azuredns/clouddns for a built-in provider).
 issuers: []
 # - name: letsencrypt-prod
 #   server: https://acme-v02.api.letsencrypt.org/directory
 #   email: certs@example.com
 #   dnsZones: ["example.com"]
 #   dns01:
-#     route53:
-#       region: us-east-1
-#       hostedZoneID: ...
-#       accessKeyID: ...
-#       secretAccessKeySecretRef:
-#         name: route53-credentials
-#         key: secret-access-key
+#     webhook:
+#       groupName: acme.yourcompany.com
+#       solverName: your-dns-provider-name
+#       config: {}  # whatever your webhook implementation expects
 
 policies:
   # -- Domains that auto-approve via approver-policy once they've cleared

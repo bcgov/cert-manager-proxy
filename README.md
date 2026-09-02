@@ -59,17 +59,25 @@ the knobs (image, replica count, resources, existing-secret auth, disabling
 either dependency if you already run it cluster-wide).
 
 `issuers[].dns01` in values is passed straight through to cert-manager's
-DNS-01 solver, so any provider it supports works, not just Route53 — see
+DNS-01 solver, so any provider it supports works — a built-in one
+(Route53, Cloudflare, Azure DNS, Google CloudDNS) or, for an internal/
+custom DNS system, cert-manager's
+[webhook solver](https://cert-manager.io/docs/configuration/acme/dns01/webhook/)
+([scaffold](https://github.com/cert-manager/webhook-example)), which is
+what `values-example.yaml` demonstrates — see
 [cert-manager's DNS-01 docs](https://cert-manager.io/docs/configuration/acme/dns01/)
-for each provider's shape. The real secret material any of that needs
-(account keys, an EAB HMAC key, a cloud provider's API credentials) is
-never put in values — it's created as a Kubernetes Secret out of band and
-referenced by name/key, e.g.:
+for each built-in provider's shape. The webhook itself is a separate
+service you write and deploy; cert-manager just calls it.
+
+The real secret material any of this needs (account keys, an EAB HMAC key,
+your DNS provider's API credentials) is never put in values — it's
+created as a Kubernetes Secret out of band and referenced by name/key,
+e.g.:
 
 ```sh
-kubectl create secret generic route53-credentials \
+kubectl create secret generic internal-dns-credentials \
   --namespace cert-proxy \
-  --from-literal=secret-access-key=<your AWS secret key>
+  --from-literal=api-key=<your DNS provider's API key>
 ```
 
 ## Run locally
