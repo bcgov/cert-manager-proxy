@@ -2,7 +2,7 @@
 // certificate request, picks the right ClusterIssuer for the requested
 // provider, and creates a Certificate object. Approval (pre-validation)
 // is enforced by cert-manager's approver-policy, not this service — see
-// manifests/certificate-request-policies.yaml.
+// charts/cert-manager-proxy/templates/policies.yaml and README.md.
 package main
 
 import (
