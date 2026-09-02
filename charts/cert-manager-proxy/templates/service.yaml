@@ -1,0 +1,16 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "cert-manager-proxy.fullname" . }}
+  labels:
+    {{- include "cert-manager-proxy.labels" . | nindent 4 }}
+spec:
+  type: ClusterIP
+  ports:
+    - port: {{ .Values.service.port }}
+      targetPort: http
+      protocol: TCP
+      name: http
+  selector:
+    app.kubernetes.io/name: {{ include "cert-manager-proxy.fullname" . }}
+    app.kubernetes.io/instance: {{ .Release.Name }}

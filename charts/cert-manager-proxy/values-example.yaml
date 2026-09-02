@@ -1,0 +1,83 @@
+# Worked example: Let's Encrypt + ZeroSSL + Entrust, all via a webhook
+# DNS-01 solver (for an internal/custom DNS provider -- not one of
+# cert-manager's built-ins like Route53/Cloudflare/Azure DNS), plus a
+# pre-approved-domains allowlist and a manual-review fallback bound to an
+# SSO group. Every REPLACE_ME_* value is a placeholder -- copy this file,
+# fill in your real values, and pass it with `helm install -f`.
+#
+# The webhook itself is a separate service you write and deploy (it's what
+# actually talks to your DNS provider's API) -- cert-manager just calls it.
+# Scaffold: https://github.com/cert-manager/webhook-example
+# Docs: https://cert-manager.io/docs/configuration/acme/dns01/webhook/
+#
+# groupName/solverName below must match what your webhook registers.
+# `config` is entirely up to your webhook's implementation -- the
+# apiKeySecretRef shown is a common convention (many published webhooks
+# use it), not something cert-manager itself defines. Check your webhook's
+# own docs for its actual expected shape.
+#
+# The real secret material (account keys, EAB HMAC key, your DNS
+# provider's API credentials) never goes in this file -- it stays in
+# Kubernetes Secrets referenced by name/key below.
+
+issuers:
+  - name: letsencrypt-prod
+    server: https://acme-v02.api.letsencrypt.org/directory
+    email: certs@example.com
+    dnsZones: ["example.com"]
+    dns01:
+      webhook:
+        groupName: REPLACE_ME_WEBHOOK_GROUP_NAME
+        solverName: REPLACE_ME_WEBHOOK_SOLVER_NAME
+        config:
+          apiKeySecretRef:
+            name: internal-dns-credentials
+            key: api-key
+
+  - name: zerossl-prod
+    server: https://acme.zerossl.com/v2/DV90
+    email: certs@example.com
+    externalAccountBinding:
+      keyID: REPLACE_ME_ZEROSSL_EAB_KEY_ID
+      keySecretName: zerossl-eab-key
+      keySecretKey: secret
+    dnsZones: ["example.com"]
+    dns01:
+      webhook:
+        groupName: REPLACE_ME_WEBHOOK_GROUP_NAME
+        solverName: REPLACE_ME_WEBHOOK_SOLVER_NAME
+        config:
+          apiKeySecretRef:
+            name: internal-dns-credentials
+            key: api-key
+
+  - name: entrust-prod
+    # Entrust's ACME directory URL is account/workflow-specific -- yours is
+    # issued when you set up an ACME enrollment workflow in the Entrust
+    # PKIaaS console (Certificate Services > ACME), not a fixed public URL
+    # like the other two issuers above.
+    # https://docs.pkiaas.entrust.com/acme/pkiaas/
+    server: REPLACE_ME_ENTRUST_ACME_DIRECTORY_URL
+    email: certs@example.com
+    externalAccountBinding:
+      keyID: REPLACE_ME_ENTRUST_EAB_KEY_ID
+      keySecretName: entrust-eab-key
+      keySecretKey: secret
+    dnsZones: ["example.com"]
+    dns01:
+      webhook:
+        groupName: REPLACE_ME_WEBHOOK_GROUP_NAME
+        solverName: REPLACE_ME_WEBHOOK_SOLVER_NAME
+        config:
+          apiKeySecretRef:
+            name: internal-dns-credentials
+            key: api-key
+
+policies:
+  preApprovedDomains:
+    dnsNames:
+      - "*.example.com"
+      - "example.com"
+  manualReview:
+    enabled: true
+    reviewerGroup: REPLACE_ME_SSO_GROUP # map to your SSO/IdP group

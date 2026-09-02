@@ -24,8 +24,9 @@ behind an out-of-band pre-approval gate.
   RBAC-bound to a human-approvers group for everything else. cert-manager
   won't create the ACME order until the `CertificateRequest` is `Approved`.
 
-See `manifests/` for the `ClusterIssuer`, `CertificateRequestPolicy`, and
-RBAC definitions.
+`ClusterIssuer`s and `CertificateRequestPolicy`s are templated from Helm
+values — see `charts/cert-manager-proxy/values-example.yaml` for a worked
+example, and the "Deploying to a cluster" section below.
 
 ## Build & test
 
@@ -34,25 +35,55 @@ go build ./...
 go test ./...
 ```
 
-## Cluster setup
+## Deploying to a cluster
 
-`scripts/bootstrap-cluster.sh` installs cert-manager and `approver-policy`
-(pinned Helm chart versions) on whatever cluster your kubeconfig points at,
-then applies `manifests/`:
+`charts/cert-manager-proxy` is a Helm chart for the whole stack: the proxy
+itself, plus cert-manager and `approver-policy` as chart dependencies (both
+pulled from `oci://quay.io/jetstack/charts` — nothing vendored), plus your
+`ClusterIssuer`s and `CertificateRequestPolicy`s templated from values. One
+`helm install`, no separate `kubectl apply` step.
 
 ```sh
-./scripts/bootstrap-cluster.sh
+helm dependency build charts/cert-manager-proxy
+helm install cert-manager-proxy charts/cert-manager-proxy \
+  --namespace cert-proxy --create-namespace \
+  --values charts/cert-manager-proxy/values-example.yaml \
+  --set auth.token=s3cret   # or auth.existingSecretName for anything real
 ```
 
-It sets `disableAutoApproval=true` on the cert-manager install — without
-that, cert-manager's built-in approver auto-approves every
+The chart sets `disableAutoApproval=true` on the cert-manager dependency —
+without that, cert-manager's built-in approver auto-approves every
 `CertificateRequest` and the whole pre-approval gate this repo exists for
-does nothing.
+does nothing. See `charts/cert-manager-proxy/values.yaml` for the rest of
+the knobs (image, replica count, resources, existing-secret auth, disabling
+either dependency if you already run it cluster-wide).
 
-## Run
+`issuers[].dns01` in values is passed straight through to cert-manager's
+DNS-01 solver, so any provider it supports works — a built-in one
+(Route53, Cloudflare, Azure DNS, Google CloudDNS) or, for an internal/
+custom DNS system, cert-manager's
+[webhook solver](https://cert-manager.io/docs/configuration/acme/dns01/webhook/)
+([scaffold](https://github.com/cert-manager/webhook-example)), which is
+what `values-example.yaml` demonstrates — see
+[cert-manager's DNS-01 docs](https://cert-manager.io/docs/configuration/acme/dns01/)
+for each built-in provider's shape. The webhook itself is a separate
+service you write and deploy; cert-manager just calls it.
+
+The real secret material any of this needs (account keys, an EAB HMAC key,
+your DNS provider's API credentials) is never put in values — it's
+created as a Kubernetes Secret out of band and referenced by name/key,
+e.g.:
+
+```sh
+kubectl create secret generic internal-dns-credentials \
+  --namespace cert-proxy \
+  --from-literal=api-key=<your DNS provider's API key>
+```
+
+## Run locally
 
 Requires a kubeconfig (or in-cluster config) with access to a cluster that
-has cert-manager and `approver-policy` installed (see Cluster setup above).
+has cert-manager and `approver-policy` installed (see Deploying above).
 
 `CERT_PROXY_TOKEN` is required — the server refuses to start without it.
 It's a single shared bearer token, fine for one trusted caller; see the
@@ -72,12 +103,8 @@ curl -X POST localhost:8080/certificates \
 curl -H "Authorization: Bearer s3cret" localhost:8080/certificates/app-example-com
 ```
 
-Every `REPLACE_ME_*` value in `manifests/` is a placeholder — the real
-secret material (account keys, EAB HMAC key, Route53 secret access key) is
-already kept out of these files via `*SecretRef`s to Kubernetes Secrets. On
-EKS, skip static AWS keys entirely and use IRSA instead (see the comment in
-`cluster-issuers.yaml`).
-
 ## Not done yet
 
-- Deployment manifests for the proxy itself (Deployment/Service/SA)
+- CI to build and push the container image (`Dockerfile` exists but nothing
+  publishes it to `ghcr.io/bcgov/cert-manager-proxy` yet, so the chart's
+  default `image.repository` won't resolve until that's set up)

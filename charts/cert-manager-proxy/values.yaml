@@ -1,0 +1,77 @@
+# -- Image for the cert-manager-proxy intake API itself.
+image:
+  repository: ghcr.io/bcgov/cert-manager-proxy
+  tag: "" # defaults to .Chart.AppVersion
+  pullPolicy: IfNotPresent
+
+replicaCount: 1
+
+service:
+  port: 8080
+
+# -- Namespace Certificate objects are created in (CERT_PROXY_NAMESPACE).
+# Defaults to the release namespace.
+namespace: ""
+
+auth:
+  # -- Name of an existing Secret holding the bearer token (recommended:
+  # create it out of band, e.g. `kubectl create secret generic ...`).
+  existingSecretName: ""
+  existingSecretKey: "token"
+  # -- Plaintext token the chart will store in a Secret it creates.
+  # Convenient for a quick try; for anything real, use existingSecretName
+  # instead so the token never passes through `helm install`/history.
+  token: ""
+
+serviceAccount:
+  create: true
+  name: ""
+
+resources: {}
+
+# -- One ClusterIssuer per entry. Empty by default -- nothing is created
+# until you configure at least one. See values-example.yaml for a worked
+# Let's Encrypt + ZeroSSL + Entrust example, via a webhook DNS-01 solver
+# (for an internal/custom DNS provider -- swap dns01.webhook for
+# dns01.route53/cloudflare/azuredns/clouddns for a built-in provider).
+issuers: []
+# - name: letsencrypt-prod
+#   server: https://acme-v02.api.letsencrypt.org/directory
+#   email: certs@example.com
+#   dnsZones: ["example.com"]
+#   dns01:
+#     webhook:
+#       groupName: acme.yourcompany.com
+#       solverName: your-dns-provider-name
+#       config: {}  # whatever your webhook implementation expects
+
+policies:
+  # -- Domains that auto-approve via approver-policy once they've cleared
+  # your out-of-band pre-validation. Empty means the policy (and the
+  # auto-approval it grants) isn't created at all.
+  preApprovedDomains:
+    dnsNames: []
+  # -- Everything outside preApprovedDomains falls back to this policy,
+  # which is deliberately permissive on domains -- gated entirely by RBAC.
+  # Disabled by default since it needs a real SSO/IdP group name.
+  manualReview:
+    enabled: false
+    reviewerGroup: ""
+
+# -- cert-manager is installed as a chart dependency (oci://quay.io/jetstack/charts).
+# disableAutoApproval is required: without it cert-manager's built-in
+# approver auto-approves every CertificateRequest, bypassing approver-policy
+# entirely and defeating the pre-approval gate this whole proxy exists for.
+cert-manager:
+  enabled: true
+  crds:
+    enabled: true
+  disableAutoApproval: true
+
+# -- approver-policy is installed as a chart dependency; it's what actually
+# enforces the pre-approval gate via the CertificateRequestPolicy + RBAC
+# templated from issuers/policies above.
+# (Its own values.schema.json rejects an unknown "enabled" key, so the
+# install toggle lives here rather than nested under cert-manager-approver-policy:.)
+approverPolicyEnabled: true
+cert-manager-approver-policy: {}
