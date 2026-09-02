@@ -1,0 +1,35 @@
+{{- /*
+One ClusterIssuer per entry in .Values.issuers. `dns01` is passed straight
+through to the solver, so it works with any DNS-01 provider cert-manager
+supports (route53, cloudflare, azuredns, clouddns, webhook, ...) -- see
+https://cert-manager.io/docs/configuration/acme/dns01/ for the shape each
+provider expects.
+*/ -}}
+{{- range .Values.issuers }}
+---
+apiVersion: cert-manager.io/v1
+kind: ClusterIssuer
+metadata:
+  name: {{ .name }}
+  labels:
+    {{- include "cert-manager-proxy.labels" $ | nindent 4 }}
+spec:
+  acme:
+    server: {{ .server }}
+    email: {{ .email }}
+    privateKeySecretRef:
+      name: {{ .privateKeySecretName | default (printf "%s-account-key" .name) }}
+    {{- with .externalAccountBinding }}
+    externalAccountBinding:
+      keyID: {{ .keyID }}
+      keySecretRef:
+        name: {{ .keySecretName }}
+        key: {{ .keySecretKey | default "secret" }}
+    {{- end }}
+    solvers:
+      - dns01:
+          {{- toYaml .dns01 | nindent 10 }}
+        selector:
+          dnsZones:
+            {{- toYaml .dnsZones | nindent 12 }}
+{{- end }}

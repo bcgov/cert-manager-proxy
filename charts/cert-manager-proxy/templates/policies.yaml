@@ -1,0 +1,76 @@
+{{- if .Values.policies.preApprovedDomains.dnsNames }}
+---
+# Auto-approve, but only for domains that already cleared out-of-band
+# pre-validation. The intake API's ServiceAccount is granted "use" on this
+# policy by templates/rbac.yaml -- nothing else is.
+apiVersion: policy.cert-manager.io/v1alpha1
+kind: CertificateRequestPolicy
+metadata:
+  name: pre-approved-domains
+  labels:
+    {{- include "cert-manager-proxy.labels" . | nindent 4 }}
+spec:
+  allowed:
+    commonName:
+      required: false
+    dnsNames:
+      required: true
+      values:
+        {{- toYaml .Values.policies.preApprovedDomains.dnsNames | nindent 8 }}
+  selector:
+    issuerRef:
+      group: "cert-manager.io"
+      kind: "ClusterIssuer"
+      name: "*"
+{{- end }}
+{{- if .Values.policies.manualReview.enabled }}
+---
+# Deliberately permissive on domains -- gated entirely by who is RBAC-bound
+# to it, i.e. human approvers in policies.manualReview.reviewerGroup. They
+# approve pending CertificateRequests directly:
+# `kubectl cert-manager approve <name>`.
+apiVersion: policy.cert-manager.io/v1alpha1
+kind: CertificateRequestPolicy
+metadata:
+  name: manual-review
+  labels:
+    {{- include "cert-manager-proxy.labels" . | nindent 4 }}
+spec:
+  allowed:
+    commonName:
+      required: false
+    dnsNames:
+      required: true
+  selector:
+    issuerRef:
+      group: "cert-manager.io"
+      kind: "ClusterIssuer"
+      name: "*"
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: {{ include "cert-manager-proxy.fullname" . }}-manual-reviewer
+  labels:
+    {{- include "cert-manager-proxy.labels" . | nindent 4 }}
+rules:
+  - apiGroups: ["policy.cert-manager.io"]
+    resources: ["certificaterequestpolicies"]
+    verbs: ["use"]
+    resourceNames: ["manual-review"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: {{ include "cert-manager-proxy.fullname" . }}-manual-reviewer
+  labels:
+    {{- include "cert-manager-proxy.labels" . | nindent 4 }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: {{ include "cert-manager-proxy.fullname" . }}-manual-reviewer
+subjects:
+  - kind: Group
+    name: {{ required "policies.manualReview.reviewerGroup is required when policies.manualReview.enabled is true" .Values.policies.manualReview.reviewerGroup }}
+    apiGroup: rbac.authorization.k8s.io
+{{- end }}

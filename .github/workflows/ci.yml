@@ -42,7 +42,11 @@ jobs:
         uses: azure/setup-helm@9bc31f4ebc9c6b171d7bfbaa5d006ae7abdb4310 # v5.0.1
       - name: Build chart dependencies
         run: helm dependency build charts/cert-manager-proxy
-      - name: Lint
+      - name: Lint (default values)
         run: helm lint charts/cert-manager-proxy --set auth.token=ci-placeholder
-      - name: Template
+      - name: Lint (values-example.yaml)
+        run: helm lint charts/cert-manager-proxy -f charts/cert-manager-proxy/values-example.yaml --set auth.token=ci-placeholder
+      - name: Template (default values)
         run: helm template test charts/cert-manager-proxy --set auth.token=ci-placeholder > /dev/null
+      - name: Template (values-example.yaml)
+        run: helm template test charts/cert-manager-proxy -f charts/cert-manager-proxy/values-example.yaml --set auth.token=ci-placeholder > /dev/null

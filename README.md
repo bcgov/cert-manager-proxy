@@ -24,8 +24,9 @@ behind an out-of-band pre-approval gate.
   RBAC-bound to a human-approvers group for everything else. cert-manager
   won't create the ACME order until the `CertificateRequest` is `Approved`.
 
-See `manifests/` for the `ClusterIssuer`, `CertificateRequestPolicy`, and
-RBAC definitions.
+`ClusterIssuer`s and `CertificateRequestPolicy`s are templated from Helm
+values — see `charts/cert-manager-proxy/values-example.yaml` for a worked
+example, and the "Deploying to a cluster" section below.
 
 ## Build & test
 
@@ -36,17 +37,21 @@ go test ./...
 
 ## Deploying to a cluster
 
-`charts/cert-manager-proxy` is a Helm chart for the proxy itself, with
-cert-manager and `approver-policy` declared as chart dependencies (both
-pulled from `oci://quay.io/jetstack/charts` — nothing vendored). One
-`helm install` brings up all three.
+`charts/cert-manager-proxy` is a Helm chart for the whole stack: the proxy
+itself, plus cert-manager and `approver-policy` as chart dependencies (both
+pulled from `oci://quay.io/jetstack/charts` — nothing vendored), plus your
+`ClusterIssuer`s and `CertificateRequestPolicy`s templated from values. One
+`helm install`, no separate `kubectl apply` step.
 
-`scripts/bootstrap-cluster.sh` wraps that: builds the chart dependencies,
-installs the release (generating a bearer token if you don't pass
-`CERT_PROXY_TOKEN`), and applies this repo's example `manifests/`:
+`scripts/bootstrap-cluster.sh` wraps that: builds the chart dependencies
+and installs the release (generating a bearer token if you don't pass
+`CERT_PROXY_TOKEN`), using `values-example.yaml` — full of `REPLACE_ME_*`
+placeholders — unless you point it at your own:
 
 ```sh
 ./scripts/bootstrap-cluster.sh
+# or, with real values:
+VALUES_FILE=my-values.yaml ./scripts/bootstrap-cluster.sh
 ```
 
 Or drive Helm directly:
@@ -55,6 +60,7 @@ Or drive Helm directly:
 helm dependency build charts/cert-manager-proxy
 helm install cert-manager-proxy charts/cert-manager-proxy \
   --namespace cert-proxy --create-namespace \
+  --values charts/cert-manager-proxy/values-example.yaml \
   --set auth.token=s3cret   # or auth.existingSecretName for anything real
 ```
 
@@ -64,6 +70,20 @@ without that, cert-manager's built-in approver auto-approves every
 does nothing. See `charts/cert-manager-proxy/values.yaml` for the rest of
 the knobs (image, replica count, resources, existing-secret auth, disabling
 either dependency if you already run it cluster-wide).
+
+`issuers[].dns01` in values is passed straight through to cert-manager's
+DNS-01 solver, so any provider it supports works, not just Route53 — see
+[cert-manager's DNS-01 docs](https://cert-manager.io/docs/configuration/acme/dns01/)
+for each provider's shape. The real secret material any of that needs
+(account keys, an EAB HMAC key, a cloud provider's API credentials) is
+never put in values — it's created as a Kubernetes Secret out of band and
+referenced by name/key, e.g.:
+
+```sh
+kubectl create secret generic route53-credentials \
+  --namespace cert-proxy \
+  --from-literal=secret-access-key=<your AWS secret key>
+```
 
 ## Run locally
 
@@ -87,12 +107,6 @@ curl -X POST localhost:8080/certificates \
 
 curl -H "Authorization: Bearer s3cret" localhost:8080/certificates/app-example-com
 ```
-
-Every `REPLACE_ME_*` value in `manifests/` is a placeholder — the real
-secret material (account keys, EAB HMAC key, Route53 secret access key) is
-already kept out of these files via `*SecretRef`s to Kubernetes Secrets. On
-EKS, skip static AWS keys entirely and use IRSA instead (see the comment in
-`cluster-issuers.yaml`).
 
 ## Not done yet
 

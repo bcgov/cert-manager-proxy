@@ -29,6 +29,36 @@ serviceAccount:
 
 resources: {}
 
+# -- One ClusterIssuer per entry. Empty by default -- nothing is created
+# until you configure at least one. See values-example.yaml for a worked
+# Let's Encrypt + ZeroSSL (via Route53 DNS-01) example.
+issuers: []
+# - name: letsencrypt-prod
+#   server: https://acme-v02.api.letsencrypt.org/directory
+#   email: certs@example.com
+#   dnsZones: ["example.com"]
+#   dns01:
+#     route53:
+#       region: us-east-1
+#       hostedZoneID: ...
+#       accessKeyID: ...
+#       secretAccessKeySecretRef:
+#         name: route53-credentials
+#         key: secret-access-key
+
+policies:
+  # -- Domains that auto-approve via approver-policy once they've cleared
+  # your out-of-band pre-validation. Empty means the policy (and the
+  # auto-approval it grants) isn't created at all.
+  preApprovedDomains:
+    dnsNames: []
+  # -- Everything outside preApprovedDomains falls back to this policy,
+  # which is deliberately permissive on domains -- gated entirely by RBAC.
+  # Disabled by default since it needs a real SSO/IdP group name.
+  manualReview:
+    enabled: false
+    reviewerGroup: ""
+
 # -- cert-manager is installed as a chart dependency (oci://quay.io/jetstack/charts).
 # disableAutoApproval is required: without it cert-manager's built-in
 # approver auto-approves every CertificateRequest, bypassing approver-policy
@@ -40,8 +70,8 @@ cert-manager:
   disableAutoApproval: true
 
 # -- approver-policy is installed as a chart dependency; it's what actually
-# enforces the pre-approval gate via CertificateRequestPolicy + RBAC.
-# See manifests/ in this repo for example policies to apply after install.
+# enforces the pre-approval gate via the CertificateRequestPolicy + RBAC
+# templated from issuers/policies above.
 # (Its own values.schema.json rejects an unknown "enabled" key, so the
 # install toggle lives here rather than nested under cert-manager-approver-policy:.)
 approverPolicyEnabled: true

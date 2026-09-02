@@ -2,22 +2,23 @@ cert-manager-proxy is deployed.
 
 This chart also installed cert-manager and approver-policy as dependencies
 (disable either via --set cert-manager.enabled=false /
---set cert-manager-approver-policy.enabled=false if you already run them
-cluster-wide).
+--set approverPolicyEnabled=false if you already run them cluster-wide).
 
-Next steps:
-1. Apply the example ClusterIssuer(s) and CertificateRequestPolicy(-ies)
-   from this repo's manifests/ directory -- edit the REPLACE_ME_* values
-   first:
+{{- if not .Values.issuers }}
 
-     kubectl apply -f manifests/
+No issuers or policies are configured (issuers/policies.* are empty), so no
+ClusterIssuer or CertificateRequestPolicy was created -- nothing can be
+issued yet. See values-example.yaml for a worked example, then:
 
-2. Port-forward and try it:
+  helm upgrade {{ .Release.Name }} <chart> --reuse-values -f my-values.yaml
+{{- end }}
 
-     kubectl port-forward svc/{{ include "cert-manager-proxy.fullname" . }} 8080:{{ .Values.service.port }}
-     curl -X POST localhost:8080/certificates \
-       -H "Authorization: Bearer <your token>" \
-       -d '{"domain":"app.example.com","provider":"letsencrypt"}'
+Try it:
+
+  kubectl port-forward svc/{{ include "cert-manager-proxy.fullname" . }} 8080:{{ .Values.service.port }}
+  curl -X POST localhost:8080/certificates \
+    -H "Authorization: Bearer <your token>" \
+    -d '{"domain":"app.example.com","provider":"letsencrypt"}'
 
 {{- if and (not .Values.auth.existingSecretName) .Values.auth.token }}
 
