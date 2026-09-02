@@ -7,10 +7,9 @@
 
 > **Experimental.** The Helmfile stack (cert-manager, approver-policy, RBAC,
 > `ClusterIssuer`s/`CertificateRequestPolicy`s) is verified against a real
-> cluster on every CI run — see `test/integration`. The proxy application
-> itself has never run in a cluster, though: no container image is
-> published yet (see "Not done yet"), and no real ACME issuance/DNS-01 has
-> been exercised end-to-end (no reachable DNS from the CI test cluster).
+> cluster on every CI run — see `test/integration`. CI publishes the proxy
+> image to `ghcr.io/bcgov/cert-manager-proxy`. No real ACME issuance/DNS-01
+> has been exercised end-to-end (no reachable DNS from the CI test cluster).
 > Do not deploy as-is.
 
 A thin intake API in front of [cert-manager](https://cert-manager.io/) that
@@ -303,10 +302,6 @@ curl -H "Authorization: Bearer s3cret" localhost:8080/certificates/app-example-c
 
 ## Not done yet
 
-- CI to build and push the container image (`Dockerfile` exists but nothing
-  publishes it to `ghcr.io/bcgov/cert-manager-proxy` yet, so the chart's
-  default `image.repository` won't resolve until that's set up) — until
-  then, the proxy's own Deployment can't actually run in a cluster
 - Real end-to-end ACME issuance / DNS-01 challenge — `test/integration`
   verifies the platform (cert-manager, approver-policy, CRDs, RBAC) comes
   up correctly, but has no reachable DNS/domain to actually complete a
