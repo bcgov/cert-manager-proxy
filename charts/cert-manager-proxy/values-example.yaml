@@ -1,7 +1,8 @@
-# Worked example: Let's Encrypt + ZeroSSL, both via Route53 DNS-01, plus a
-# pre-approved-domains allowlist and a manual-review fallback bound to an
-# SSO group. Every REPLACE_ME_* value is a placeholder -- copy this file,
-# fill in your real values, and pass it with `helm install -f`.
+# Worked example: Let's Encrypt + ZeroSSL + Entrust, all via Route53
+# DNS-01, plus a pre-approved-domains allowlist and a manual-review
+# fallback bound to an SSO group. Every REPLACE_ME_* value is a
+# placeholder -- copy this file, fill in your real values, and pass it
+# with `helm install -f`.
 #
 # The real secret material (account keys, EAB HMAC key, Route53 secret
 # access key) never goes in this file -- it stays in Kubernetes Secrets
@@ -30,6 +31,28 @@ issuers:
     externalAccountBinding:
       keyID: REPLACE_ME_ZEROSSL_EAB_KEY_ID
       keySecretName: zerossl-eab-key
+      keySecretKey: secret
+    dnsZones: ["example.com"]
+    dns01:
+      route53:
+        region: us-east-1
+        hostedZoneID: REPLACE_ME_HOSTED_ZONE_ID
+        accessKeyID: REPLACE_ME_AWS_ACCESS_KEY_ID
+        secretAccessKeySecretRef:
+          name: route53-credentials
+          key: secret-access-key
+
+  - name: entrust-prod
+    # Entrust's ACME directory URL is account/workflow-specific -- yours is
+    # issued when you set up an ACME enrollment workflow in the Entrust
+    # PKIaaS console (Certificate Services > ACME), not a fixed public URL
+    # like the other two issuers above.
+    # https://docs.pkiaas.entrust.com/acme/pkiaas/
+    server: REPLACE_ME_ENTRUST_ACME_DIRECTORY_URL
+    email: certs@example.com
+    externalAccountBinding:
+      keyID: REPLACE_ME_ENTRUST_EAB_KEY_ID
+      keySecretName: entrust-eab-key
       keySecretKey: secret
     dnsZones: ["example.com"]
     dns01:
